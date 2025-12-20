@@ -3,10 +3,10 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 const AntigravityInner = ({
-  count = 300,
-  magnetRadius = 10,
+  count = 600,
+  magnetRadius = 15,
   ringRadius = 10,
-  waveSpeed = 0.4,
+  waveSpeed = 2,
   waveAmplitude = 1,
   particleSize = 2,
   lerpSpeed = 0.1,

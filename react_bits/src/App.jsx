@@ -1,21 +1,28 @@
+// src/App.jsx
 import React from "react";
 import Navbar from "./components/Navbar";
+import AboutSection from "./components/AboutSection";
 
 function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Navbar />
 
-      {/* Page content placeholder */}
       <main className="pt-20">
-        <section id="about" className="h-screen px-6 py-10">
-          <h1 className="text-3xl font-bold">About section</h1>
+        <AboutSection />
+
+        <section
+          id="services"
+          className="min-h-screen flex items-center justify-center px-6"
+        >
+          <h2 className="text-3xl md:text-4xl font-bold">Services</h2>
         </section>
-        <section id="services" className="h-screen px-6 py-10">
-          <h1 className="text-3xl font-bold">Services section</h1>
-        </section>
-        <section id="contact" className="h-screen px-6 py-10">
-          <h1 className="text-3xl font-bold">Contact section</h1>
+
+        <section
+          id="contact"
+          className="min-h-screen flex items-center justify-center px-6"
+        >
+          <h2 className="text-3xl md:text-4xl font-bold">Contact</h2>
         </section>
       </main>
     </div>
