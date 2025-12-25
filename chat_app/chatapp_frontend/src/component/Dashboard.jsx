@@ -1,5 +1,4 @@
-// src/components/Dashboard.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './dashboard/Sidebar';
 import ProfileSetup from './dashboard/ProfileSetup';
@@ -14,23 +13,11 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
+  const [stompClient, setStompClient] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      checkUserProfile(userData.userId);
-    } else {
-      navigate('/login');
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedUser]);
-
-  const checkUserProfile = async (userId) => {
+  const checkUserProfile = useCallback(async (userId) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/profile/${userId}`);
@@ -38,16 +25,102 @@ const Dashboard = () => {
       
       if (data.success) {
         setProfileComplete(true);
-        const updatedUser = { ...user, profile: data.profile };
-        setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(prevUser => {
+                   const updatedUser = { ...prevUser, profile: data.profile };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        });
       }
     } catch (err) {
       console.log('No profile found');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // 🚨 COMPLETE FIXED useEffect
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      console.log('User loaded:', userData);
+      if (userData.id || userData.userId) {
+        setUser(userData);
+        checkUserProfile(userData.id || userData.userId);
+      } else {
+        console.error('Invalid user data:', userData);
+        navigate('/login');
+      }
+    } else {
+      navigate('/login');
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // 🟢 HTTP POLLING - WORKS EVERYWHERE (No WebSocket needed)
+  useEffect(() => {
+    if (!selectedUser?.id || !user?.id) return;  // ← ADD THIS GUARD
+    
+    const interval = setInterval(async () => {
+      try {
+        const currentUserId = parseInt(user.id) || parseInt(user.userId);
+        const selectedId = parseInt(selectedUser.id);
+        
+        if (!currentUserId || !selectedId) {
+          console.log('⏳ Waiting for valid IDs...');
+          return;
+        }
+        
+        const chatId = `${Math.min(currentUserId, selectedId)}-${Math.max(currentUserId, selectedId)}`;
+        console.log('📡 Polling chatId:', chatId);  // DEBUG
+        
+                const response = await fetch(`/api/messages?chatId=${chatId}`);  // ← USE PROXY /api
+        const newMessages = await response.json();
+        
+        if (newMessages.length > 0) {
+          setMessages(prev => {
+            // Filter out duplicates
+            const existingIds = new Set(prev.map(m => m.id));
+            const filteredNew = newMessages.filter(msg => !existingIds.has(msg.id));
+            return [...prev, ...filteredNew];
+          });
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [selectedUser?.id, user?.id]);  // ← DEPEND ON IDs
+
+  // 🟢 HTTP Send Message (Replace sendMessage function)
+  const sendMessage = useCallback(async () => {
+    if (!selectedUser?.id || !user?.id || !newMessage.trim()) return;
+    
+    const currentUserId = parseInt(user.id) || parseInt(user.userId);
+    const selectedId = parseInt(selectedUser.id);
+    const chatId = `${Math.min(currentUserId, selectedId)}-${Math.max(currentUserId, selectedId)}`;
+    
+    try {
+      console.log('📤 Sending to:', chatId);
+      await fetch(`/api/chat`, {  // ← USE PROXY
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId,
+          senderId: currentUserId.toString(),
+          senderTag: user.profile?.tag || user.email,
+          content: newMessage
+        })
+      });
+      setNewMessage('');
+    } catch (error) {
+      console.error('Send error:', error);
+    }
+  }, [selectedUser?.id, user, newMessage]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -56,29 +129,25 @@ const Dashboard = () => {
 
   const handleProfileComplete = (profileData) => {
     setProfileComplete(true);
-    const updatedUser = { ...user, profile: profileData };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(prevUser => {
+      const updatedUser = { ...prevUser, profile: profileData };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      return updatedUser;
+    });
   };
 
   const handleUserSelect = (selected) => {
     setSelectedUser(selected);
+    setMessages([]);
   };
 
   const handleCloseChat = () => {
     setSelectedUser(null);
+    setMessages([]);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-slate-900 flex items-center justify-center p-4">
-        <div className="text-white text-xl flex items-center space-x-3">
-          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          <span>Loading dashboard...</span>
-        </div>
-      </div>
-    );
-  }
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-slate-900 to-black flex">
@@ -107,14 +176,14 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Profile & Search (Hidden on mobile when chat open) */}
+        {/* Left Panel - Profile & Search */}
         <div className={`w-full lg:w-96 border-r border-slate-700/50 p-4 lg:p-6 space-y-6 overflow-y-auto transition-all duration-300 ${selectedUser ? 'lg:block hidden' : 'block'}`}>
           
           {/* Profile Setup OR Welcome */}
           {!profileComplete ? (
             <div className="w-full max-w-sm mx-auto">
               <ProfileSetup 
-                userId={user.userId} 
+                userId={user?.userId || user?.id} 
                 onComplete={handleProfileComplete} 
               />
             </div>
@@ -151,29 +220,29 @@ const Dashboard = () => {
         <div className="flex-1 flex flex-col min-w-0 p-4 lg:p-6">
           {selectedUser ? (
             <>
-            {/* Mobile Chat Header */}
-            <div className="lg:hidden flex items-center justify-between mb-4 p-4 bg-slate-900/70 backdrop-blur-xl rounded-2xl border border-slate-700/50">
-              <div className="flex items-center space-x-3 flex-1 min-w-0">
-                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg flex-shrink-0">
-                  {selectedUser.username?.slice(0, 2).toUpperCase()}
+              {/* Mobile Chat Header */}
+              {/* Mobile Chat Header */}
+              <div className="lg:hidden flex items-center justify-between mb-4 p-4 bg-slate-900/70 backdrop-blur-xl rounded-2xl border border-slate-700/50">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg flex-shrink-0">
+                    {selectedUser.username?.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-white font-bold text-lg truncate">{selectedUser.username}</h3>
+                    <p className="text-slate-400 text-sm truncate">{selectedUser.tag}</p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-white font-bold text-lg truncate">{selectedUser.username}</h3>
-                  <p className="text-slate-400 text-sm truncate">{selectedUser.tag}</p>
-                </div>
+                <button 
+                  onClick={handleCloseChat}
+                  className="p-2 hover:bg-slate-700 rounded-xl transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5 text-slate-400" />
+                </button>
               </div>
-              <button 
-                onClick={handleCloseChat}
-                className="p-2 hover:bg-slate-700 rounded-xl transition-colors"
-              >
-                <XMarkIcon className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
 
-            {/* Chat Container */}
-            <div className="flex-1 flex flex-col bg-gradient-to-b from-slate-900/50 to-slate-800/50 backdrop-blur-xl rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden">
-              {/* Desktop Chat Header */}
-              {!selectedUser || (
+              {/* Chat Container */}
+              <div className="flex-1 flex flex-col bg-gradient-to-b from-slate-900/50 to-slate-800/50 backdrop-blur-xl rounded-3xl border border-slate-700/50 shadow-2xl overflow-hidden">
+                {/* Desktop Chat Header */}
                 <div className="hidden lg:flex p-6 border-b border-slate-700/50 bg-slate-900/70 backdrop-blur-xl">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg">
@@ -190,43 +259,84 @@ const Dashboard = () => {
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* Messages Area */}
-              <div className="flex-1 p-4 lg:p-6 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900/50">
-                <div className="flex items-start space-x-3">
-                  <div className="w-7 h-7 lg:w-8 lg:h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">You</div>
-                  <div className="bg-blue-600/80 backdrop-blur-xl p-3 lg:p-4 rounded-2xl rounded-tr-sm max-w-xs lg:max-w-md">
-                    <p className="text-white text-sm">Chat ready! Send your first message 🚀</p>
-                  </div>
+                {/* Messages Area */}
+                <div className="flex-1 p-4 lg:p-6 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900/50">
+                  {messages.length === 0 ? (
+                    <>
+                      <div className="flex items-start space-x-3">
+                        <div className="w-7 h-7 lg:w-8 lg:h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">You</div>
+                        <div className="bg-blue-600/80 backdrop-blur-xl p-3 lg:p-4 rounded-2xl rounded-tr-sm max-w-xs lg:max-w-md">
+                          <p className="text-white text-sm">Chat ready! Send your first message 🚀</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start justify-end space-x-3 space-x-reverse">
+                        <div className="bg-purple-600/80 backdrop-blur-xl p-3 lg:p-4 rounded-2xl rounded-tl-sm max-w-xs lg:max-w-md">
+                          <p className="text-white text-sm">Hi! {selectedUser.username} is online and ready to chat!</p>
+                        </div>
+                        <div className="w-7 h-7 lg:w-8 lg:h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                          {selectedUser.username?.slice(0, 2).toUpperCase()}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    messages.map((msg, index) => (
+                      <div 
+                        key={index}
+                        className={`flex items-start space-x-3 ${msg.senderId === (user.userId || user.id) ? 'justify-end space-x-reverse' : ''}`}
+                      >
+                        <div className={`p-3 rounded-2xl max-w-xs lg:max-w-md backdrop-blur-xl ${
+                          msg.senderId === (user.userId || user.id)
+                            ? 'bg-blue-600/80 rounded-tr-sm' 
+                            : 'bg-purple-600/80 rounded-tl-sm'
+                        }`}>
+                          <p className="text-white text-sm">{msg.content}</p>
+                          <p className="text-xs text-slate-300 mt-1 opacity-75">
+                            {msg.senderTag}
+                          </p>
+                        </div>
+                                                <div className={`w-7 h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${
+                          msg.senderId === (user.userId || user.id) ? 'bg-blue-500 order-first' : 'bg-purple-500 order-last'
+                        }`}>
+                          {msg.senderTag?.slice(0, 2).toUpperCase()}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-                <div className="flex items-start justify-end space-x-3 space-x-reverse">
-                  <div className="bg-purple-600/80 backdrop-blur-xl p-3 lg:p-4 rounded-2xl rounded-tl-sm max-w-xs lg:max-w-md">
-                    <p className="text-white text-sm">Hi! {selectedUser.username} is online and ready to chat!</p>
-                  </div>
-                  <div className="w-7 h-7 lg:w-8 lg:h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                    {selectedUser.username?.slice(0, 2).toUpperCase()}
-                  </div>
-                </div>
-                <div ref={messagesEndRef} />
-              </div>
 
-              {/* Message Input */}
-              <div className="p-4 lg:p-6 border-t border-slate-700/50 bg-slate-900/70 backdrop-blur-xl">
-                <div className="flex space-x-3 items-end">
-                  <input
-                    type="text"
-                    placeholder="Type a message..."
-                    className="flex-1 bg-slate-800/70 border border-slate-700 rounded-2xl px-4 lg:px-5 py-3 lg:py-4 text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:border-transparent focus:outline-none transition-all resize-none text-sm lg:text-base"
-                  />
-                  <button className="w-12 h-12 lg:w-14 lg:h-14 flex-shrink-0 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 rounded-2xl flex items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 group">
-                    <svg className="w-5 h-5 lg:w-6 lg:h-6 text-white group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
-                </div>
+                {/* Message Input */}
+                {/* Message Input */}
+<div className="p-4 lg:p-6 border-t border-slate-700/50 bg-slate-900/70 backdrop-blur-xl">
+  <div className="flex space-x-3 items-end">
+    <input
+      type="text"
+      value={newMessage}
+      onChange={(e) => setNewMessage(e.target.value)}
+      onKeyPress={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }}
+      placeholder="Type message..."
+      className="flex-1 bg-slate-800/70 border border-slate-700 rounded-2xl px-4 py-3 text-white placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 transition-all resize-none"
+      disabled={false}
+    />
+    <button 
+      onClick={sendMessage}
+      disabled={!newMessage.trim()}
+      className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 rounded-2xl flex items-center justify-center shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+    >
+      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+      </svg>
+    </button>
+  </div>
+</div>
+
               </div>
-            </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center bg-gradient-to-b from-slate-900/30 to-slate-800/30 backdrop-blur-xl rounded-3xl border-2 border-slate-700/50 border-dashed">
