@@ -1,6 +1,7 @@
 // src/components/Signup.jsx
 import { useState } from 'react';
-import { UserPlusIcon, EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import { UserPlusIcon, EnvelopeIcon, LockClosedIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -8,17 +9,60 @@ const Signup = () => {
     password: '',
     confirmPassword: ''
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+    setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Signup form submitted:', formData);
+    setLoading(true);
+    setError('');
+
+    // Validate confirm password
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+     if (formData.password.length < 6) {
+    setError('Password must be at least 6 characters');
+    setLoading(false);
+    return;
+  }
+
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        }),
+      });
+
+      if (response.ok) {
+        // Signup successful - redirect to login
+        navigate('/login');
+      } else {
+        const data = await response.json();
+        setError(data.message || 'Signup failed');
+      }
+    // eslint-disable-next-line no-unused-vars
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,8 +76,15 @@ const Signup = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-slate-100 to-purple-200 bg-clip-text text-transparent mb-3">
             Create Account
           </h1>
-          <p className="text-slate-400 text-lg">Join us and start chatting</p>
+          <p className="text-slate-400 text-lg">Join QuikChat today</p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -51,7 +102,8 @@ const Signup = () => {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300"
+                disabled={loading}
+                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300 disabled:opacity-50"
                 placeholder="Enter your email"
               />
             </div>
@@ -71,7 +123,8 @@ const Signup = () => {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300"
+                disabled={loading}
+                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300 disabled:opacity-50"
                 placeholder="Create a password"
               />
             </div>
@@ -91,7 +144,8 @@ const Signup = () => {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
-                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300"
+                disabled={loading}
+                className="w-full pl-12 pr-4 py-4 bg-slate-900/70 border border-slate-600/50 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/30 transition-all duration-300 disabled:opacity-50"
                 placeholder="Confirm your password"
               />
             </div>
@@ -100,12 +154,34 @@ const Signup = () => {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white font-semibold py-4 px-8 rounded-2xl shadow-xl shadow-purple-500/40 hover:shadow-2xl hover:shadow-purple-500/60 transform hover:-translate-y-1 transition-all duration-300 flex items-center justify-center space-x-2 text-lg"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:via-pink-700 hover:to-purple-800 text-white font-semibold py-4 px-8 rounded-2xl shadow-xl shadow-purple-500/40 hover:shadow-2xl hover:shadow-purple-500/60 transform hover:-translate-y-1 transition-all duration-300 flex items-center justify-center space-x-2 text-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
-            <UserPlusIcon className="w-6 h-6" />
-            <span>Sign Up</span>
+            {loading ? (
+              <>
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Creating...</span>
+              </>
+            ) : (
+              <>
+                <UserPlusIcon className="w-6 h-6" />
+                <span>Sign Up</span>
+              </>
+            )}
           </button>
         </form>
+
+        {/* Login Link */}
+        <div className="mt-8 pt-6 border-t border-slate-700/50 text-center">
+          <p className="text-slate-400 text-sm mb-4">Already have an account?</p>
+          <button
+            onClick={() => navigate('/login')}
+            className="inline-flex items-center space-x-2 bg-slate-800/50 hover:bg-slate-700 text-slate-300 font-medium py-3 px-6 rounded-xl border border-slate-600/50 hover:border-slate-500/50 transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl"
+          >
+            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+            <span>Go to Login</span>
+          </button>
+        </div>
       </div>
     </div>
   );
