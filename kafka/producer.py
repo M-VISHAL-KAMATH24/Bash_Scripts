@@ -9,13 +9,13 @@ def delivery_report(err,msg):
         print(f"delivery failed:{err}")
     else:
         print(f"delivery success: {msg.value().decode('utf-8')}")
-        print(dir(msg))
+        print(f"topic:{msg.topic()} partition:{msg.partition()} offset:{msg.offset()}")
 
 order={
     "order_id":str(uuid.uuid4()),
-    "user":"vishal",
-    "item":"dell laptop",
-    "quantity":2
+    "user":"vishal kamath",
+    "item":"hp laptop",
+    "quantity":3
 }
 
 value=json.dumps(order).encode("utf-8")
