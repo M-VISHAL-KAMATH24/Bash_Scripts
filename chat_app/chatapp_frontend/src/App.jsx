@@ -1,12 +1,9 @@
 import React from 'react'
+import Signup from './component/Signup'
 
 const App = () => {
   return (
-    <div>
-      <h4 className='text-5xl'>
-        welcome to the website
-      </h4>
-    </div>
+   <Signup/>
   )
 }
 
