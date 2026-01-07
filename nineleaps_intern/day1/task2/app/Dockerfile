@@ -2,9 +2,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production --no-optional 
+RUN npm install --production --no-optional
 
-COPY server.js .
+# Copy ALL app files
+COPY . .  
 
 EXPOSE 3000
 CMD ["node", "server.js"]

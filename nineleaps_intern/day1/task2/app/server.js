@@ -1,46 +1,48 @@
 const express = require('express');
-const { Client } = require('@elastic/elasticsearch');
 const cors = require('cors');
+const logger = require('./logger');  // ← Now exists!
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-const client = new Client({ 
-  node: process.env.ELASTIC_URL || 'http://elasticsearch:9200'
+// AUTO-LOGGING ENDPOINTS
+app.get('/users', (req, res) => {
+  logger.info('Fetching users', { count: 42 });
+  res.json({ users: ['Alice', 'Bob'], count: 42 });
 });
 
-// POST /log
-app.post('/log', async (req, res) => {
-  try {
-    const { message, level = 'info', endpoint = '/' } = req.body;
-    const logDoc = {
-      '@timestamp': new Date().toISOString(),
-      message, level, endpoint, host: 'docker-app'
-    };
-    
-    const result = await client.index({ index: 'app-logs', document: logDoc });
-    console.log('✅ Log saved:', logDoc.message);
-    
-    res.json({ success: true, id: result._id });
-  } catch (err) {
-    console.error('❌ Error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+app.post('/login', (req, res) => {
+  const { username } = req.body;
+  logger.info('Login attempt', { username, success: true });
+  res.json({ success: true, token: 'abc123' });
 });
 
-// GET /logs (recent 10)
-app.get('/logs', async (req, res) => {
-  try {
-    const { body } = await client.search({
-      index: 'app-logs',
-      size: 10,
-      sort: [{ '@timestamp': 'desc' }]
+app.post('/payment', (req, res) => {
+  const { amount, userId, card } = req.body;
+  if (!card || card.length < 16) {
+    logger.error('Payment failed', { 
+      error: 'Invalid card', amount: amount || 0, userId: userId || 'unknown' 
     });
-    res.json(body.hits.hits.map(hit => hit._source));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(400).json({ error: 'Payment failed' });
   }
+  logger.info('Payment success', { amount, userId });
+  res.json({ success: true });
 });
 
-app.listen(3000, () => console.log('🚀 App on http://localhost:3000'));
+// Health check endpoint
+app.get('/health', (req, res) => {
+  logger.info('Health check passed', { 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: Math.round(process.uptime())
+  });
+});
+
+
+app.listen(3000, () => logger.info('🚀 App started'));
