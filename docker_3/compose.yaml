@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  retroarch-web:
+    image: inglebard/retroarch-web:latest  # Or linuxserver/retroarch for more features
+    container_name: retroarch-web
+    ports:
+      - "8080:80"  # Web access at localhost:8080
+      - "5900:5900"  # Optional direct VNC
+    environment:
+      - VNC_PASSWORD=password1  # Change for security
+    volumes:
+      - retroarch_config:/config  # Persist RetroArch settings
+      - ./roms:/roms:ro  # Mount your ROMs folder (read-only)
+    restart: unless-stopped
+    networks:
+      - retro-net
+
+volumes:
+  retroarch_config:
+
+networks:
+  retro-net:
+    driver: bridge
