@@ -1,0 +1,29 @@
+Access Token + Refresh Token System
+
+Access Token:
+
+Short expiry (15 min)
+
+Refresh Token:
+
+Long expiry (7 days)
+
+Used to generate new access token
+
+This is industry standard.
+
+🏗 Example Flow (Modern Production App)
+
+Login
+
+Server creates:
+
+Access Token (15 min)
+
+Refresh Token (7 days)
+
+Store both in HttpOnly cookies
+
+If access expires → use refresh token
+
+If refresh expires → force login
