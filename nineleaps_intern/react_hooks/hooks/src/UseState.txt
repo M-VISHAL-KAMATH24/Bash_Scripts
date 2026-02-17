@@ -1,0 +1,21 @@
+// useState is the hook that helps to maintain the state variable and keeps track of the state of the component and makes the changes in the UI wehn the state is changed
+
+import React from 'react'
+import { useState } from 'react'
+const App = () => {
+  const [name,setName]=useState("krish vet corner");
+  const changename=()=>{
+    setName("tech slayers");
+
+  }
+  return (
+    <>
+      <h1>
+        the current name of website is {name}
+      </h1>
+      <button onClick={changename}>click to change the name</button>
+    </>
+  )
+}
+
+export default App

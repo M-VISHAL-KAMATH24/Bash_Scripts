@@ -1,0 +1,39 @@
+//while handling the multiple state varaibles we can use the objects of variables but make sure when updating use ...previous data to avoid the update causing the old data to be lost
+
+import React, { useState } from 'react'
+import './index.css';
+const App = () => {
+  const [car,setCar]=useState({
+    brand:"ferrari",
+    mil:"18",
+    color:"red",
+    rate:"2000$"
+  });
+
+  const cbrand=()=>{
+    setCar((e)=>{
+      return{...e,brand:"bmw"}
+    })
+  }
+  return (
+    <>
+      <h1>
+        welcome to multiple state variable example
+      </h1>
+
+      <h2>
+        My car is {car.brand}
+      </h2>
+      <p>
+        it has mileage of {car.mil} and its color is {car.color} and price is {car.rate}
+      </p>
+
+      <button onClick={cbrand}>change brand</button>
+      {/* <button onClick={cmil}>change mil</button>
+      <button onClick={cclr}>change color</button>
+      <button onClick={crate}>change rate</button> */}
+    </>
+  )
+}
+
+export default App
